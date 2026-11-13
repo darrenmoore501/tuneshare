@@ -1,22 +1,26 @@
 import json
+import math
 import subprocess
 import sys
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 import pytest
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageColor
 
 from siriusvision.app import ScreenManager
 from siriusvision.config import Config, load_config
 from siriusvision.displays.base import prepare_frame
 from siriusvision.displays.png_output import PngDisplay
 from siriusvision.screens.base import RenderContext
+from siriusvision.screens.album_art import AlbumArt
 from siriusvision.screens.letter_clock import GRID, WORDS, highlighted_words
 from siriusvision.screens.pixel_font import text_width
-from siriusvision.screens.word_clock import clock_words
+from siriusvision.screens.word_clock import WordClock, clock_words
 from siriusvision.services.moon import moon_phase
 from siriusvision.services.tides import DemoTides
+from siriusvision.themes import THEMES, get_theme
 
 
 @pytest.mark.parametrize(("hour", "minute", "expected"), [
@@ -43,6 +47,13 @@ def test_all_clock_words_fit(hour, clock_format):
         words = clock_words(hour, minute, clock_format)
         assert all(text_width(word) <= 60 for word in words)
         assert len(words) * 5 + (len(words) - 1) * 2 <= 64
+        frame = WordClock().render(RenderContext(
+            now=datetime(2025, 6, 1, hour, minute, tzinfo=timezone.utc),
+            clock_format=clock_format,
+        ))
+        background = Image.new("RGB", frame.size, get_theme("shrigley_dark").background)
+        bounds = ImageChops.difference(frame, background).getbbox()
+        assert bounds is not None and 2 <= bounds[1] < bounds[3] <= 62
 
 
 def test_timezone_and_dst():
@@ -151,6 +162,7 @@ def test_manager_controls():
     {"brightness": -1}, {"brightness": True}, {"cycle_seconds": 0},
     {"timezone": "Not/AZone"}, {"screens": []}, {"demo_tides": "yes"},
     {"palette": ["#ffffff"]}, {"unexpected": True},
+    {"theme": "missing"}, {"theme": []},
 ])
 def test_invalid_config(tmp_path, data):
     path = tmp_path / "config.json"
@@ -159,12 +171,137 @@ def test_invalid_config(tmp_path, data):
         load_config(str(path))
 
 
-def test_cli_png(tmp_path):
+@pytest.mark.parametrize("theme_name", tuple(THEMES))
+def test_cli_png(tmp_path, theme_name):
     path = tmp_path / "letter.png"
     subprocess.run([sys.executable, "-m", "siriusvision", "--display", "png", "--screen",
-                    "letter-clock", "--time", "12:22", "--output", str(path)], check=True)
+                    "letter-clock", "--theme", theme_name, "--time", "12:22",
+                    "--output", str(path)], check=True)
     with Image.open(path) as image:
         assert image.size == (64, 64) and image.mode == "RGB"
+        background = prepare_frame(Image.new("RGB", (64, 64), get_theme(theme_name).background), 80)
+        assert image.getpixel((0, 0)) == background.getpixel((0, 0))
     result = subprocess.run([sys.executable, "-m", "siriusvision", "--display", "png",
                              "--time", "24:00", "--output", str(path)], capture_output=True)
     assert result.returncode != 0 and b"HH:MM" in result.stderr
+
+
+@pytest.mark.parametrize("theme_name", tuple(THEMES))
+def test_theme_pixels_and_roles(theme_name):
+    now = datetime(2025, 6, 1, 12, 22, tzinfo=ZoneInfo("Europe/London"))
+    manager = ScreenManager(Config(theme=theme_name, brightness=100))
+    theme = manager.theme
+    allowed = {ImageColor.getrgb(value) for value in (
+        theme.background, theme.foreground, theme.inactive, *theme.accents,
+        theme.tide_curve, theme.tide_marker, theme.moon_shadow, theme.moon_light,
+        theme.placeholder_sky, theme.placeholder_land, theme.placeholder_sun,
+        theme.placeholder_wave,
+    )}
+    for name in manager.order:
+        manager.select(manager.order.index(name))
+        frame = manager.render(now)
+        colours = set(frame.get_flattened_data())
+        assert frame.size == (64, 64) and frame.mode == "RGB"
+        assert colours <= allowed
+        if name == "letter-clock":
+            assert frame.getpixel((0, 0)) == ImageColor.getrgb(theme.background)
+            assert frame.getpixel((2, 2)) == ImageColor.getrgb(theme.accents[0])
+            assert frame.getpixel((10, 2)) == ImageColor.getrgb(theme.inactive)
+        elif name == "word-clock":
+            assert colours == {
+                ImageColor.getrgb(value) for value in (theme.background, *theme.accents[:3])
+            }
+        elif name == "tide-moon":
+            marker_y = round(47 - 8 * math.sin(DemoTides().get(now).phase))
+            assert frame.getpixel((32, marker_y)) == ImageColor.getrgb(theme.tide_marker)
+            assert ImageColor.getrgb(theme.tide_curve) in colours
+
+
+def test_theme_config_and_cycle(tmp_path):
+    path = tmp_path / "theme.json"
+    path.write_text(json.dumps({"theme": "shrigley_paper"}))
+    assert load_config(str(path)).theme == "shrigley_paper"
+    manager = ScreenManager(Config())
+    now = datetime(2025, 6, 1, 12, 22, tzinfo=timezone.utc)
+    original = manager.render(now)
+    manager.toggle_pause()
+    for name in ("shrigley_paper", "night_blue", "shrigley_dark"):
+        manager.next_theme()
+        assert manager.theme.name == name
+        assert manager.name == "word-clock" and manager.paused
+        if name != "shrigley_dark":
+            assert ImageChops.difference(original, manager.render(now)).getbbox()
+    assert ImageChops.difference(original, manager.render(now)).getbbox() is None
+    accents = ("#112233", "#445566", "#778899", "#AABBCC")
+    path.write_text(json.dumps({"palette": accents}))
+    custom = ScreenManager(load_config(str(path)))
+    assert custom.theme.accents == accents
+    custom.next_theme()
+    assert custom.theme.accents == accents
+
+
+def test_album_art_is_not_recoloured():
+    now = datetime(2025, 6, 1, tzinfo=timezone.utc)
+    art = Image.new("RGB", (64, 64))
+    art.putdata([(index % 256, index // 64, 123) for index in range(4096)])
+    before = art.tobytes()
+    for theme in THEMES.values():
+        frame = AlbumArt().render(RenderContext(now=now, theme=theme, album_art=art))
+        assert frame is not art and frame.tobytes() == before
+    assert art.tobytes() == before
+    for invalid in (Image.new("RGB", (32, 32)), Image.new("L", (64, 64))):
+        with pytest.raises(ValueError, match="native-size RGB"):
+            AlbumArt().render(RenderContext(now=now, album_art=invalid))
+
+
+def test_preview_theme_key_and_flat_scaling(monkeypatch):
+    from siriusvision.displays import mac_preview
+
+    class Widget:
+        def __init__(self, *args, **kwargs):
+            self.options = kwargs
+            self.items = {}
+
+        def configure(self, **kwargs):
+            self.options.update(kwargs)
+
+        def create_image(self, *args, **kwargs):
+            return self.create_line(*args, **kwargs)
+
+        def create_line(self, *args, **kwargs):
+            item = len(self.items)
+            self.items[item] = kwargs
+            return item
+
+        def itemconfigure(self, item, **kwargs):
+            self.items[item].update(kwargs)
+
+        def pack(self, **kwargs):
+            pass
+
+        def title(self, text):
+            pass
+
+        def bind(self, event, callback):
+            self.callback = callback
+
+        def protocol(self, *args):
+            pass
+
+    for name in ("Tk", "Label", "Canvas"):
+        monkeypatch.setattr(mac_preview.tk, name, Widget)
+    monkeypatch.setattr(mac_preview.ImageTk, "PhotoImage", lambda image, master: image)
+    now = datetime(2025, 6, 1, 12, 22, tzinfo=timezone.utc)
+    manager = ScreenManager(Config(brightness=100, show_grid=True))
+    preview = mac_preview.MacPreview(manager, lambda: now)
+    preview.show(manager.render(now))
+    preview.root.callback(SimpleNamespace(keysym="T"))
+    frame = manager.render(now)
+    preview.show(frame)
+    assert manager.theme.name == "shrigley_paper"
+    assert preview.root.options["bg"] == manager.theme.background
+    assert preview.controls.options["fg"] == manager.theme.foreground
+    assert manager.theme.name in preview.title.options["text"]
+    assert all(preview.canvas.items[item]["fill"] == manager.theme.inactive
+               for item in preview.grid_items)
+    assert preview.photo.tobytes() == frame.resize((640, 640), Image.Resampling.NEAREST).tobytes()

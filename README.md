@@ -4,8 +4,6 @@ Pixel-art screens for Sirius, a boat with a planned 64×64 LED display. Phase 1
 runs entirely offline on a Mac; no Pi, network, Spotify account or credentials
 are needed.
 
-![SiriusVision simulator showing the spoken clock at 14:07](docs/images/preview.png)
-
 ## macOS quick start
 
 Install Python 3.11 or newer from [python.org](https://www.python.org/downloads/macos/)
@@ -26,13 +24,15 @@ the native frame.
 
 - **N / right**: next screen; **P / left**: previous screen.
 - **Space**: pause/resume rotation; **1–4**: select a screen in configured
-  order; **Q**: quit. Screen changes cross-fade in the preview.
+  order; **T**: cycle themes; **Q**: quit. Screen and theme changes are
+  immediate, without blended transition colours.
 - The default rotation is 30 seconds; pausing does not stop clock updates or
   the tide animation.
 
 ```sh
 python -m siriusvision --display preview --screen word-clock --time 14:07
 python -m siriusvision --display preview --screen tide-moon --demo
+python -m siriusvision --display preview --theme shrigley_paper
 python -m siriusvision --display png --screen letter-clock --time 12:22 --output /tmp/clock.png
 python -m pytest
 ```
@@ -47,32 +47,67 @@ requires a graphical desktop and Tkinter.
 Copy `config.example.json` to an appropriate local path and pass
 `--config /path/to/config.json`; otherwise built-in defaults are used. Set
 screen order, `cycle_seconds` (1–86400), logical `brightness` (0–100),
-IANA `timezone`, `clock_format` (12 or 24), `show_grid`, and at least four
-hexadecimal `palette` colours. Brightness is applied at output, not inside
-screen rendering. Invalid settings are reported on startup.
+IANA `timezone`, `clock_format` (12 or 24), `show_grid`, and `theme`.
+`shrigley_dark` is the default: warm paper, charcoal ink and bold, muted
+poster colours inspired by the requested David Shrigley artwork palette,
+not a reproduction of the artwork. `shrigley_paper` uses a warm paper
+background and darker accents; `night_blue` uses a deep blue background
+with cooler accents. **T** cycles these themes without changing the screen
+or pausing rotation; the simulator title shows the active theme.
+`--theme` overrides the configured theme for preview or PNG output.
 
-* **Word clock:** complete words at native resolution, dynamically scaled to
-  fit. Minutes below ten include ZERO. In 12-hour mode AM/PM is shown for
+All screen and simulator UI colours come from `siriusvision/themes.py`.
+For compatibility, an optional `palette` array of at least four `#RRGGBB`
+colours overrides only the theme's clock accents (including when cycling
+themes); omit it to use the designed palettes. Brightness is applied at
+output, not inside screen rendering. Invalid settings are reported on startup.
+
+* **Word clock:** stacked complete words in four rotating accent colours,
+  dynamically scaled to fit, with six-pixel gaps. Minutes below ten include
+  ZERO. In 12-hour mode AM/PM is shown for
   minutes 00–19; for 20–59 it is omitted to keep the face uncluttered.
   24-hour mode spells the hour from ZERO to TWENTY THREE.
 * **Letter clock:** an original ten-row, fifteen-column face of 3×5 glyphs
-  on a 4×6 pitch, starting at (2,2). Dim letters stay in place; highlighted
+  on a 4×6 pitch, starting at (2,2). Muted cloud-blue letters stay in place
+  against the default ink background; contrasting highlighted
   spans spell the time rounded to the nearest five minutes. Separate FIVE
   and TEN spans distinguish minutes from hours; the hour advances for
   “TO” and at the rounding boundary near the hour.
 * **Tide + moon:** the wave is **DEMO DATA**, not a Thames prediction or
-  navigational information. `demo_tides` defaults to true and the screen
+  navigational information. A single cloud-blue curve has a warm mustard
+  marker, alongside a simple paper-coloured moon. `demo_tides` defaults to true and the screen
   labels it visibly; `--demo` enables it explicitly. Set `demo_tides` to
   false to show OFFLINE until a real provider exists. The moon is an offline
   approximation using a 29.530588853-day synodic period from the
   2000-01-06 18:14 UTC new-moon epoch; it is not an ephemeris.
-* **Album art:** a generated, original sunset gradient, not Spotify artwork.
+* **Album art:** a flat, original sunset placeholder labelled NO ART, not
+  Spotify artwork. A future provider can supply native 64×64 RGB artwork
+  via `RenderContext.album_art`; its pixels are copied unchanged, never
+  recoloured by the theme. Output brightness still applies as for all screens.
+
+### Saving default-theme examples
+
+All drawing uses integer pixels and flat fills, without gradients or
+anti-aliasing; the simulator enlarges frames with nearest-neighbour
+scaling. Export one native 64×64 PNG per screen with:
+
+```sh
+python -m siriusvision --display png --theme shrigley_dark --screen word-clock --time 12:22 --output docs/images/shrigley_dark-word-clock.png
+python -m siriusvision --display png --theme shrigley_dark --screen letter-clock --time 12:22 --output docs/images/shrigley_dark-letter-clock.png
+python -m siriusvision --display png --theme shrigley_dark --screen tide-moon --time 12:22 --output docs/images/shrigley_dark-tide-moon.png
+python -m siriusvision --display png --theme shrigley_dark --screen album-art --time 12:22 --output docs/images/shrigley_dark-album-art.png
+```
+
+The date is today's local date, so the moon phase changes between exports
+on different days. To capture the palette at full brightness, use a
+configuration with `"brightness": 100` and pass its path via `--config`.
 
 ## Architecture and phase status
 
 Each screen implements `render(context)` and returns a native Pillow RGB
 image; it has no knowledge of the output backend. The context carries
-timezone-aware time, palette, brightness and optional tide data. The screen
+timezone-aware time, active theme, brightness, optional tide data and
+optional native album artwork. The screen
 manager supplies offline data before drawing and offers selection and
 cycling APIs. The preview and PNG displays validate frames and apply output
 brightness. The tiny bitmap font is original to this project.

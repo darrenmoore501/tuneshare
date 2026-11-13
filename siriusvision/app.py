@@ -11,12 +11,14 @@ from siriusvision.screens.letter_clock import LetterClock
 from siriusvision.screens.tide_moon import TideMoon
 from siriusvision.screens.word_clock import WordClock
 from siriusvision.services.tides import DemoTides
+from siriusvision.themes import THEMES, Theme, get_theme
 
 
 class ScreenManager:
     def __init__(self, config: Config, start: str | None = None,
                  monotonic: Callable[[], float] = time.monotonic):
         self.config = config
+        self.theme_name = get_theme(config.theme).name
         self.screens = {screen.name: screen for screen in (WordClock(), LetterClock(), TideMoon(), AlbumArt())}
         self.order = list(config.screens)
         if start is not None and start not in self.order:
@@ -30,6 +32,14 @@ class ScreenManager:
     @property
     def name(self) -> str:
         return self.order[self.index]
+
+    @property
+    def theme(self) -> Theme:
+        return get_theme(self.theme_name, self.config.palette)
+
+    def next_theme(self) -> None:
+        names = tuple(THEMES)
+        self.theme_name = names[(names.index(self.theme_name) + 1) % len(names)]
 
     def select(self, index: int) -> None:
         self.index = index % len(self.order)
@@ -51,7 +61,7 @@ class ScreenManager:
 
     def render(self, now: datetime) -> Image.Image:
         tide = self.tides.get(now) if self.config.demo_tides and self.name == "tide-moon" else None
-        context = RenderContext(now=now, palette=tuple(self.config.palette),
+        context = RenderContext(now=now, theme=self.theme,
                                 clock_format=self.config.clock_format, tide=tide,
                                 brightness=self.config.brightness)
         return self.screens[self.name].render(context)
