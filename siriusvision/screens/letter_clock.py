@@ -54,15 +54,16 @@ class LetterClock:
     name = "letter-clock"
 
     def render(self, context: RenderContext) -> Image.Image:
-        image = Image.new("RGB", (context.width, context.height))
+        theme = context.theme
+        image = Image.new("RGB", (context.width, context.height), theme.background)
         draw = ImageDraw.Draw(image)
         selected = {}
         for index, word in enumerate(highlighted_words(context.now.hour, context.now.minute)):
             row, start, length = WORDS[word]
             for column in range(start, start + length):
-                selected[(row, column)] = context.palette[index % len(context.palette)]
+                selected[(row, column)] = theme.accents[index % len(theme.accents)]
         for row, line in enumerate(GRID):
             for column, char in enumerate(line):
                 draw_text(draw, char, 2 + column * 4, 2 + row * 6,
-                          selected.get((row, column), (19, 23, 27)))
+                          selected.get((row, column), theme.inactive))
         return image

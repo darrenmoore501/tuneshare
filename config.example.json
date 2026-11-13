@@ -6,5 +6,5 @@
   "clock_format": 12,
   "demo_tides": true,
   "show_grid": false,
-  "palette": ["#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF"]
+  "theme": "shrigley_dark"
 }

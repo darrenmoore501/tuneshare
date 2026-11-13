@@ -5,17 +5,19 @@ from typing import Protocol
 from PIL import Image
 
 from siriusvision.services.tides import TideData
+from siriusvision.themes import SHRIGLEY_DARK, Theme
 
 
 @dataclass(frozen=True)
 class RenderContext:
     now: datetime
-    palette: tuple[str, ...]
+    theme: Theme = SHRIGLEY_DARK
     clock_format: int = 12
     tide: TideData | None = None
     width: int = 64
     height: int = 64
     brightness: int = 100
+    album_art: Image.Image | None = None
 
 
 class Screen(Protocol):

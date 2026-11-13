@@ -36,16 +36,18 @@ class WordClock:
 
     def render(self, context: RenderContext) -> Image.Image:
         words = clock_words(context.now.hour, context.now.minute, context.clock_format)
-        image = Image.new("RGB", (context.width, context.height))
+        theme = context.theme
+        image = Image.new("RGB", (context.width, context.height), theme.background)
         draw = ImageDraw.Draw(image)
+        gap = 6
         scale = min(2, min((context.width - 4) // text_width(word) for word in words),
-                    (context.height - 2 * (len(words) - 1)) // (5 * len(words)))
+                    (context.height - 4 - gap * (len(words) - 1)) // (5 * len(words)))
         if scale < 1:
             raise ValueError("Clock words do not fit canvas")
-        height = len(words) * 5 * scale + (len(words) - 1) * 2
+        height = len(words) * 5 * scale + (len(words) - 1) * gap
         y = (context.height - height) // 2
         for index, word in enumerate(words):
             x = (context.width - text_width(word, scale)) // 2
-            draw_text(draw, word, x, y, context.palette[index % len(context.palette)], scale)
-            y += 5 * scale + 2
+            draw_text(draw, word, x, y, theme.accents[index % len(theme.accents)], scale)
+            y += 5 * scale + gap
         return image

@@ -3,6 +3,8 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from siriusvision.themes import DEFAULT_THEME, get_theme
+
 
 SCREEN_NAMES = ("word-clock", "letter-clock", "tide-moon", "album-art")
 
@@ -16,7 +18,8 @@ class Config:
     clock_format: int = 12
     demo_tides: bool = True
     show_grid: bool = False
-    palette: tuple[str, ...] = ("#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF")
+    theme: str = DEFAULT_THEME
+    palette: tuple[str, ...] | None = None
 
 
 def load_config(path: str | None = None) -> Config:
@@ -48,12 +51,14 @@ def load_config(path: str | None = None) -> Config:
         if not isinstance(config.timezone, str):
             raise ValueError("timezone must be an IANA timezone name")
         ZoneInfo(config.timezone)
-        if not isinstance(config.palette, (list, tuple)) or len(config.palette) < 4:
-            raise ValueError("palette must have at least four #RRGGBB colours")
-        for colour in config.palette:
-            if not isinstance(colour, str) or len(colour) != 7 or colour[0] != "#":
-                raise ValueError("palette colours must be #RRGGBB")
-            int(colour[1:], 16)
+        get_theme(config.theme)
+        if config.palette is not None:
+            if not isinstance(config.palette, (list, tuple)) or len(config.palette) < 4:
+                raise ValueError("palette must have at least four #RRGGBB colours")
+            for colour in config.palette:
+                if not isinstance(colour, str) or len(colour) != 7 or colour[0] != "#":
+                    raise ValueError("palette colours must be #RRGGBB")
+                int(colour[1:], 16)
     except (TypeError, ZoneInfoNotFoundError) as exc:
         raise ValueError(f"Invalid config: {exc}") from exc
     return config
