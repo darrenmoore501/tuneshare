@@ -1,0 +1,10 @@
+{
+  "screens": ["word-clock", "letter-clock", "tide-moon", "album-art"],
+  "cycle_seconds": 30,
+  "brightness": 80,
+  "timezone": "Europe/London",
+  "clock_format": 12,
+  "demo_tides": true,
+  "show_grid": false,
+  "palette": ["#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF"]
+}
