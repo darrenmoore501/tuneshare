@@ -16,6 +16,7 @@ class RenderContext:
     width: int = 64
     height: int = 64
     brightness: int = 100
+    album_artwork: Image.Image | None = None
 
 
 class Screen(Protocol):

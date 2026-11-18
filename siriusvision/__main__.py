@@ -53,7 +53,11 @@ def main(argv=None) -> int:
         config = load_config(args.config)
         if args.demo:
             config = replace(config, demo_tides=True)
-        manager = ScreenManager(config, args.screen)
+        playback = None
+        if args.display == "pi" and config.spotify_enabled and args.screen is None:
+            from siriusvision.services.spotify_state import RuntimeArtwork
+            playback = RuntimeArtwork(config.spotify_runtime_dir)
+        manager = ScreenManager(config, args.screen, playback=playback)
         now = lambda: local_now(config.timezone, args.time)
         if args.display == "png":
             from siriusvision.displays.png_output import PngDisplay

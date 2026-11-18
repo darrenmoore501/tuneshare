@@ -9,5 +9,6 @@ dist/
 .env.*
 !.env.example
 tokens/
+spotify_tokens.json
 cache/
 photos/
