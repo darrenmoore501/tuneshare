@@ -180,7 +180,7 @@ def test_pi_matrix_initialization_transmission_and_shutdown(monkeypatch):
     default_display.close()
 
 
-def test_pi_matrix_brightness_validation_and_missing_bindings(monkeypatch):
+def test_pi_matrix_brightness_validation():
     with pytest.raises(ValueError):
         PiMatrixDisplay(brightness=101)
     with pytest.raises(ValueError, match="1 to 100"):
@@ -188,12 +188,20 @@ def test_pi_matrix_brightness_validation_and_missing_bindings(monkeypatch):
     with pytest.raises(ValueError):
         PiMatrixDisplay(brightness=True)
 
-    def missing_module(name):
-        raise ModuleNotFoundError("No module named 'rgbmatrix'")
 
-    monkeypatch.setattr("importlib.import_module", missing_module)
-    with pytest.raises(ImportError, match="rgbmatrix Python bindings"):
+@pytest.mark.parametrize("error", [
+    ModuleNotFoundError("No module named 'rgbmatrix'"),
+    ImportError("cannot load native matrix library"),
+])
+def test_pi_matrix_binding_import_error(monkeypatch, error):
+    def fail_import(name):
+        raise error
+
+    monkeypatch.setattr("importlib.import_module", fail_import)
+    with pytest.raises(ImportError, match="rgbmatrix Python bindings") as exc:
         PiMatrixDisplay()
+    assert ".venv/bin/python" in str(exc.value)
+    assert str(error) in str(exc.value)
 
 
 def test_headless_runner_cycles_skips_unchanged_frames_and_closes():

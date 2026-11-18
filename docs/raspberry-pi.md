@@ -68,7 +68,9 @@ cd /home/darren/tuneshare
 cp config.example.json config.json
 ```
 
-Start the application manually before installing the service:
+Start the application manually before installing the service. Use the full
+path to the virtual environment's Python with `sudo`: `sudo python3` normally
+selects system Python, even if you activated `.venv` in your shell.
 
 ```sh
 sudo /home/darren/tuneshare/.venv/bin/python -m siriusvision \
@@ -140,9 +142,18 @@ an application-only update.
 
 ## Troubleshooting
 
-- **`No module named rgbmatrix`:** activate/check the application's virtual
-  environment and install the bindings from
-  `/home/darren/rpi-rgb-led-matrix/bindings/python` using the command above.
+- **`The rgbmatrix Python bindings are required for --display pi`:** first
+  verify the import with the same interpreter used to launch the app:
+
+  ```sh
+  sudo /home/darren/tuneshare/.venv/bin/python -c \
+    'from rgbmatrix import RGBMatrix, RGBMatrixOptions'
+  ```
+
+  If this succeeds, use the same absolute Python path to launch SiriusVision.
+  If the module is missing, install the bindings from
+  `/home/darren/rpi-rgb-led-matrix/bindings/python` using the install command
+  above (without `sudo`). For other import errors, check the reported cause.
 - **Permission denied / GPIO timing problems:** start manually with `sudo` or
   inspect the systemd service's root startup. The hardware driver may drop
   privileges to `daemon`; verify directory traversal and file read

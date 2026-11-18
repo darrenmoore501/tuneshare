@@ -13,7 +13,11 @@ class PiMatrixDisplay:
             rgbmatrix = importlib.import_module("rgbmatrix")
         except ImportError as exc:
             raise ImportError(
-                "The rgbmatrix Python bindings are required for --display pi"
+                "The rgbmatrix Python bindings are required for --display pi. "
+                "Install them into SiriusVision's virtual environment and use "
+                "sudo with the full path to .venv/bin/python instead of sudo python3 "
+                "(see docs/raspberry-pi.md).\n"
+                f"rgbmatrix import error: {exc}"
             ) from exc
 
         options = rgbmatrix.RGBMatrixOptions()
