@@ -10,12 +10,14 @@ from siriusvision.screens.base import RenderContext
 from siriusvision.screens.letter_clock import LetterClock
 from siriusvision.screens.tide_moon import TideMoon
 from siriusvision.screens.word_clock import WordClock
+from siriusvision.services.spotify_state import PlaybackArtwork
 from siriusvision.services.tides import DemoTides
 
 
 class ScreenManager:
     def __init__(self, config: Config, start: str | None = None,
-                 monotonic: Callable[[], float] = time.monotonic):
+                 monotonic: Callable[[], float] = time.monotonic,
+                 playback: PlaybackArtwork | None = None):
         self.config = config
         self.screens = {screen.name: screen for screen in (WordClock(), LetterClock(), TideMoon(), AlbumArt())}
         self.order = list(config.screens)
@@ -26,9 +28,13 @@ class ScreenManager:
         self.monotonic = monotonic
         self.changed_at = monotonic()
         self.tides = DemoTides()
+        self.playback = playback if config.spotify_enabled and start is None else None
+        self._spotify_artwork = None
 
     @property
     def name(self) -> str:
+        if self.playback is not None:
+            return "album-art" if self._spotify_artwork is not None else self.config.spotify_fallback_screen
         return self.order[self.index]
 
     def select(self, index: int) -> None:
@@ -46,12 +52,15 @@ class ScreenManager:
         self.changed_at = self.monotonic()
 
     def tick(self) -> None:
-        if not self.paused and self.monotonic() - self.changed_at >= self.config.cycle_seconds:
+        if (self.playback is None and not self.paused
+                and self.monotonic() - self.changed_at >= self.config.cycle_seconds):
             self.next()
 
     def render(self, now: datetime) -> Image.Image:
+        if self.playback is not None:
+            self._spotify_artwork = self.playback.artwork()
         tide = self.tides.get(now) if self.config.demo_tides and self.name == "tide-moon" else None
         context = RenderContext(now=now, palette=tuple(self.config.palette),
                                 clock_format=self.config.clock_format, tide=tide,
-                                brightness=self.config.brightness)
+                                brightness=self.config.brightness, album_artwork=self._spotify_artwork)
         return self.screens[self.name].render(context)

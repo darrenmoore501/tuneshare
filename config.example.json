@@ -7,5 +7,10 @@
   "clock_format": 12,
   "demo_tides": true,
   "show_grid": false,
-  "palette": ["#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF"]
+  "palette": ["#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF"],
+  "spotify_enabled": false,
+  "spotify_mode": "auto",
+  "spotify_poll_seconds": 30,
+  "spotify_idle_poll_seconds": 60,
+  "spotify_fallback_screen": "word-clock"
 }

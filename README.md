@@ -67,7 +67,8 @@ settings are reported on startup.
   false to show OFFLINE until a real provider exists. The moon is an offline
   approximation using a 29.530588853-day synodic period from the
   2000-01-06 18:14 UTC new-moon epoch; it is not an ephemeris.
-* **Album art:** a generated, original sunset gradient, not Spotify artwork.
+* **Album art:** a generated sunset gradient in the demo; on the Pi, optional
+  Spotify auto mode shows the currently playing album cover instead.
 
 ## Architecture and phase status
 
@@ -78,8 +79,9 @@ manager supplies offline data before drawing and offers selection and
 cycling APIs. The preview and PNG displays validate frames and apply output
 brightness. The tiny bitmap font is original to this project.
 
-The Pi matrix backend is implemented; there is still no real tide provider,
-Spotify OAuth, personal photos, web UI or GPIO button. Real providers must
+The Pi matrix backend supports optional Spotify now-playing via a separate
+unprivileged poller; see [Spotify setup](docs/raspberry-pi.md#optional-spotify-now-playing).
+There is still no real tide provider, personal photos, web UI or GPIO button. Real providers must
 run independently of rendering, handle failures and timeouts, and label their
 sources. `.env`, tokens, caches and private `photos/` are ignored; never
 commit credentials or personal images.

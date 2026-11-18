@@ -18,6 +18,13 @@ class Config:
     demo_tides: bool = True
     show_grid: bool = False
     palette: tuple[str, ...] = ("#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF")
+    spotify_enabled: bool = False
+    spotify_mode: str = "auto"
+    spotify_poll_seconds: float = 30
+    spotify_idle_poll_seconds: float = 60
+    spotify_fallback_screen: str = "word-clock"
+    spotify_runtime_dir: str = "/run/siriusvision-spotify"
+    spotify_client_id: str = ""
 
 
 def load_config(path: str | None = None) -> Config:
@@ -50,6 +57,21 @@ def load_config(path: str | None = None) -> Config:
             raise ValueError("clock_format must be 12 or 24")
         if type(config.demo_tides) is not bool or type(config.show_grid) is not bool:
             raise ValueError("demo_tides and show_grid must be booleans")
+        if type(config.spotify_enabled) is not bool:
+            raise ValueError("spotify_enabled must be a boolean")
+        if config.spotify_mode != "auto":
+            raise ValueError("spotify_mode must be auto")
+        for key in ("spotify_poll_seconds", "spotify_idle_poll_seconds"):
+            interval = getattr(config, key)
+            if type(interval) not in (int, float) or not 1 <= interval <= 86400:
+                raise ValueError(f"{key} must be between 1 and 86400")
+        if config.spotify_fallback_screen not in SCREEN_NAMES:
+            raise ValueError("spotify_fallback_screen must be a known screen name")
+        if (not isinstance(config.spotify_runtime_dir, str) or "\0" in config.spotify_runtime_dir
+                or not Path(config.spotify_runtime_dir).is_absolute()):
+            raise ValueError("spotify_runtime_dir must be an absolute path")
+        if not isinstance(config.spotify_client_id, str):
+            raise ValueError("spotify_client_id must be a string")
         if not isinstance(config.timezone, str):
             raise ValueError("timezone must be an IANA timezone name")
         ZoneInfo(config.timezone)

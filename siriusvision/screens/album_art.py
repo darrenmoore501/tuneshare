@@ -9,6 +9,8 @@ class AlbumArt:
     name = "album-art"
 
     def render(self, context: RenderContext) -> Image.Image:
+        if context.album_artwork is not None:
+            return context.album_artwork
         image = Image.new("RGB", (context.width, context.height))
         draw = ImageDraw.Draw(image)
         for y in range(context.height):
