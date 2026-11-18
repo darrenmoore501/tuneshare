@@ -1,8 +1,8 @@
 import argparse
 import signal
-import time
 from dataclasses import replace
 from datetime import datetime, time
+from time import sleep
 from typing import Callable
 
 from siriusvision.app import ScreenManager
@@ -22,7 +22,7 @@ def parse_time(value: str) -> time:
 
 def run_headless(manager: ScreenManager, display: Display, now: Callable[[], datetime],
                  should_stop: Callable[[], bool],
-                 wait: Callable[[float], None] = time.sleep) -> None:
+                 wait: Callable[[float], None] = sleep) -> None:
     last_frame = None
     try:
         while not should_stop():
