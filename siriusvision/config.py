@@ -12,6 +12,7 @@ class Config:
     screens: tuple[str, ...] = SCREEN_NAMES
     cycle_seconds: float = 30
     brightness: int = 80
+    pi_brightness: int = 20
     timezone: str = "Europe/London"
     clock_format: int = 12
     demo_tides: bool = True
@@ -28,6 +29,8 @@ def load_config(path: str | None = None) -> Config:
             raise ValueError(f"Cannot read config: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError("Config must be a JSON object")
+    if "brightness" in data and data["brightness"] != 0 and "pi_brightness" not in data:
+        data["pi_brightness"] = data["brightness"]
     unknown = set(data) - {field.name for field in fields(Config)}
     if unknown:
         raise ValueError(f"Unknown config settings: {', '.join(sorted(unknown))}")
@@ -41,6 +44,8 @@ def load_config(path: str | None = None) -> Config:
             raise ValueError("cycle_seconds must be between 1 and 86400")
         if type(config.brightness) is not int or not 0 <= config.brightness <= 100:
             raise ValueError("brightness must be an integer from 0 to 100")
+        if type(config.pi_brightness) is not int or not 1 <= config.pi_brightness <= 100:
+            raise ValueError("pi_brightness must be an integer from 1 to 100")
         if type(config.clock_format) is not int or config.clock_format not in (12, 24):
             raise ValueError("clock_format must be 12 or 24")
         if type(config.demo_tides) is not bool or type(config.show_grid) is not bool:

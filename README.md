@@ -46,10 +46,11 @@ requires a graphical desktop and Tkinter.
 
 Copy `config.example.json` to an appropriate local path and pass
 `--config /path/to/config.json`; otherwise built-in defaults are used. Set
-screen order, `cycle_seconds` (1–86400), logical `brightness` (0–100),
-IANA `timezone`, `clock_format` (12 or 24), `show_grid`, and at least four
-hexadecimal `palette` colours. Brightness is applied at output, not inside
-screen rendering. Invalid settings are reported on startup.
+screen order, `cycle_seconds` (1–86400), `brightness` (0–100),
+`pi_brightness` (1–100; defaults to 20), IANA `timezone`, `clock_format`
+(12 or 24), `show_grid`, and at least four hexadecimal `palette` colours.
+Brightness is applied at output, not inside screen rendering. Invalid
+settings are reported on startup.
 
 * **Word clock:** complete words at native resolution, dynamically scaled to
   fit. Minutes below ten include ZERO. In 12-hour mode AM/PM is shown for
@@ -77,34 +78,20 @@ manager supplies offline data before drawing and offers selection and
 cycling APIs. The preview and PNG displays validate frames and apply output
 brightness. The tiny bitmap font is original to this project.
 
-Only Phase 1 is implemented. No real tide provider, Spotify OAuth, personal
-photos, matrix backend, web UI or GPIO button is included. Real providers
-must later run independently of rendering, handle failures and timeouts, and
-label their sources. `.env`, tokens, caches and private `photos/` are ignored;
-never commit credentials or personal images.
+The Pi matrix backend is implemented; there is still no real tide provider,
+Spotify OAuth, personal photos, web UI or GPIO button. Real providers must
+run independently of rendering, handle failures and timeouts, and label their
+sources. `.env`, tokens, caches and private `photos/` are ignored; never
+commit credentials or personal images.
 
-## Later Pi hardware stage — not yet implemented
+## Raspberry Pi deployment
 
-The target is an original Raspberry Pi Model B with its 26-pin header and
-Ethernet, and one 64×64 P3 HUB75 panel with 1/32 scan and ABCDE addressing.
-Use a **separately installed**, not vendored, [rpi-rgb-led-matrix
-library](https://github.com/hzeller/rpi-rgb-led-matrix). Before connecting,
-check the actual panel and the library's [wiring
-documentation](https://github.com/hzeller/rpi-rgb-led-matrix/blob/master/wiring.md);
-`regular-pi1` is a starting point, not verified wiring. A 64-row panel needs
-the E address connection. Signal buffering from 3.3V to 5V may be needed.
-
-With power disconnected, verify polarity, connections and a common logic
-ground. Power the matrix from its **own regulated 5V supply**, never from Pi
-GPIO; power the Pi separately via micro-USB. Check everything before powering
-the supplies, and power down before changing wiring. Verify the library's
-64×64 demo before attempting application integration. Refresh/flicker and
-CPU limits on the Pi 1 may require slower or disabled animation.
-
-Python 3.11+ and Pillow 13 are the development targets; neither installation
-nor ARMv6 wheels have been verified on a Pi 1. A compatible Pi OS and Python,
-and possibly a source build of Pillow and the native matrix library, must be
-verified on the device. No blanket sudo is needed on Mac. If the eventual
-matrix driver requires elevated privileges, use only the permissions or
-dedicated service required by that driver; do not run development tools as
-root. Check remaining pins before considering any physical button.
+The headless `pi` backend sends complete native 64×64 RGB frames to the
+separately installed `rpi-rgb-led-matrix` driver and leaves refreshing to the
+hardware. See [docs/raspberry-pi.md](docs/raspberry-pi.md) for Raspberry Pi OS
+installation, manual startup, and systemd service instructions. The
+matrix defaults to 20% hardware brightness; configure `pi_brightness` to
+adjust it. The existing `brightness` setting continues to control preview
+and PNG output. A config that specifies only `brightness` also uses that
+value for Pi output when it is 1–100; zero remains valid for preview/PNG and
+leaves the Pi-specific default unchanged.
