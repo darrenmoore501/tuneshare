@@ -45,14 +45,20 @@ def main(argv=None) -> int:
     parser.add_argument("--time", type=parse_time, help="override local time (HH:MM)")
     parser.add_argument("--config", help="path to JSON configuration")
     parser.add_argument("--demo", action="store_true", help="enable simulated tide data")
+    parser.add_argument("--tide-level", type=float, metavar="PERCENT",
+                        help="simulate a fixed tide level from 0 to 100 (no network)")
     parser.add_argument("--output", help="output PNG path (required for --display png)")
     args = parser.parse_args(argv)
     if args.display == "png" and not args.output:
         parser.error("--display png requires --output")
+    if args.tide_level is not None and not 0 <= args.tide_level <= 100:
+        parser.error("--tide-level must be from 0 to 100")
     try:
         config = load_config(args.config)
         if args.demo:
             config = replace(config, demo_tides=True)
+        if args.tide_level is not None:
+            config = replace(config, tide_simulation_level=args.tide_level)
         playback = None
         if args.display == "pi" and config.spotify_enabled and args.screen is None:
             from siriusvision.services.spotify_state import RuntimeArtwork

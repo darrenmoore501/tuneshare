@@ -1,7 +1,7 @@
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -15,36 +15,8 @@ from siriusvision.displays.png_output import PngDisplay
 from siriusvision.displays.pi_matrix import PiMatrixDisplay
 from siriusvision.screens.base import RenderContext
 from siriusvision.screens.letter_clock import GRID, WORDS, highlighted_words
-from siriusvision.screens.pixel_font import text_width
-from siriusvision.screens.word_clock import clock_words
-from siriusvision.services.moon import moon_phase
-from siriusvision.services.tides import DemoTides
-
-
-@pytest.mark.parametrize(("hour", "minute", "expected"), [
-    (0, 0, ["TWELVE", "ZERO", "ZERO", "AM"]),
-    (12, 0, ["TWELVE", "ZERO", "ZERO", "PM"]),
-    (12, 22, ["TWELVE", "TWENTY", "TWO"]),
-    (14, 7, ["TWO", "ZERO", "SEVEN", "PM"]),
-    (23, 59, ["ELEVEN", "FIFTY", "NINE"]),
-])
-def test_spoken_clock(hour, minute, expected):
-    assert clock_words(hour, minute) == expected
-
-
-def test_24_hour_clock():
-    assert clock_words(0, 0, 24) == ["ZERO", "ZERO", "ZERO"]
-    assert clock_words(14, 7, 24) == ["FOURTEEN", "ZERO", "SEVEN"]
-    assert clock_words(23, 59, 24) == ["TWENTY", "THREE", "FIFTY", "NINE"]
-
-
-@pytest.mark.parametrize("hour", range(24))
-@pytest.mark.parametrize("clock_format", [12, 24])
-def test_all_clock_words_fit(hour, clock_format):
-    for minute in range(60):
-        words = clock_words(hour, minute, clock_format)
-        assert all(text_width(word) <= 60 for word in words)
-        assert len(words) * 5 + (len(words) - 1) * 2 <= 64
+from siriusvision.screens.tide_lamp import TideLamp
+from siriusvision.services.tides import LampTideData, Reading, TowerPierTides
 
 
 def test_timezone_and_dst():
@@ -89,38 +61,163 @@ def test_grid_word_coordinates():
         assert 2 + row * 6 + 5 <= 64
 
 
-def test_moon_new_full_and_timezones():
-    new = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
-    full = datetime(2000, 1, 21, 5, 40, tzinfo=timezone.utc)
-    assert moon_phase(new)[1] < 0.01
-    assert moon_phase(full)[1] > 0.99
-    assert moon_phase(new) == moon_phase(new.astimezone(ZoneInfo("Europe/London")))
-    with pytest.raises(ValueError):
-        moon_phase(datetime(2025, 1, 1))
-
-
 def test_screens_and_missing_data(tmp_path):
     now = datetime(2025, 6, 1, 14, 7, tzinfo=ZoneInfo("Europe/London"))
-    manager = ScreenManager(Config())
+    manager = ScreenManager(Config(demo_tides=True))
+    assert set(manager.screens) == {"letter-clock", "tide-lamp", "album-art"}
     for name in manager.order:
         manager.select(manager.order.index(name))
         frame = manager.render(now)
         assert frame.size == (64, 64) and frame.mode == "RGB"
         assert frame.getbbox()
-    manager = ScreenManager(Config(demo_tides=False), "tide-moon")
+    manager = ScreenManager(Config(), "tide-lamp")
+    manager.tides = TowerPierTides(fetch=lambda _: [])
     offline = manager.render(now)
-    demo = ScreenManager(Config(), "tide-moon").render(now)
+    demo = ScreenManager(Config(tide_simulation_level=75), "tide-lamp").render(now)
     assert ImageChops.difference(offline, demo).getbbox()
-    assert DemoTides().get(now).demo
-    manager = ScreenManager(Config(), "tide-moon")
-    new = datetime(2000, 1, 6, 18, 14, tzinfo=timezone.utc)
-    full = datetime(2000, 1, 21, 5, 40, tzinfo=timezone.utc)
-    assert ImageChops.difference(manager.render(new).crop((38, 5, 59, 26)),
-                                 manager.render(full).crop((38, 5, 59, 26))).getbbox()
     path = tmp_path / "frame.png"
     PngDisplay(str(path)).show(offline)
     with Image.open(path) as output:
         assert output.mode == "RGB" and output.size == (64, 64)
+
+
+def test_tide_lamp_extremes_smooth_waterline_and_static_dithering():
+    lamp = TideLamp()
+    now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    blue_counts = []
+    frames = []
+    for level in (0, 0.25, 0.5, 0.75, 1):
+        context = RenderContext(now, Config().palette, tide=LampTideData(level))
+        frame = lamp.render(context)
+        assert lamp.render(context) is frame
+        pixels = [frame.getpixel((x, y)) for y in range(64) for x in range(64)]
+        blue_counts.append(sum(b > r for r, g, b in pixels))
+        assert all(max(pixel) > 0 for pixel in pixels)
+        assert any(b > r for r, g, b in pixels)
+        assert any(r > b for r, g, b in pixels)
+        frames.append(frame)
+    assert blue_counts == sorted(set(blue_counts))
+    low = frames[0]
+    high = frames[-1]
+    assert sum(low.getpixel((x, y))[0] for y in range(64) for x in range(64)) > sum(
+        high.getpixel((x, y))[0] for y in range(64) for x in range(64))
+    context = RenderContext(now, Config().palette, tide=LampTideData(0.5001))
+    nearby = lamp.render(context)
+    assert max(ImageChops.difference(frames[2], nearby).getextrema()[i][1]
+               for i in range(3)) <= 1
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        lamp.render(RenderContext(now, Config().palette, tide=LampTideData(float("nan"))))
+
+
+def test_tower_pier_polling_range_smoothing_and_outage(caplog):
+    now = datetime(2026, 6, 1, 12, tzinfo=timezone.utc)
+    elapsed = [0.0]
+    calls = []
+    readings = [Reading(now - timedelta(minutes=15 * (192 - i)), (i % 48) / 8)
+                for i in range(193)]
+    failure = [False]
+
+    def fetch(since):
+        calls.append(since)
+        if failure[0]:
+            raise OSError("offline")
+        return readings
+
+    service = TowerPierTides(fetch, lambda: elapsed[0])
+    with caplog.at_level("INFO"):
+        first = service.get(now)
+    assert first.level == 0 and first.low == 0 and first.high == 47 / 8
+    assert first.rising is False
+    assert "BST" in caplog.text
+    service.get(now)
+    assert len(calls) == 1 and calls[0] == now - timedelta(hours=72)
+    readings[-1] = Reading(now, 5)
+    elapsed[0] = 900
+    assert service.get(now).level == 0  # No jump at observation arrival.
+    elapsed[0] = 1200
+    eased = service.get(now)
+    assert 0 < eased.level < 5 / first.high
+    assert eased.rising is False  # Still lower than the preceding observation.
+    failure[0] = True
+    elapsed[0] = 1800
+    held = service.get(now)
+    assert held.observed_at == first.observed_at and held.height == 5
+    assert "offline" in caplog.text
+    with pytest.raises(ValueError, match="timezone-aware"):
+        service.get(now.replace(tzinfo=None))
+
+
+@pytest.mark.parametrize("history", ["empty", "short", "flat", "stale"])
+def test_tower_pier_rejects_unusable_history(history, caplog):
+    now = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    readings = [Reading(now - timedelta(minutes=15 * i), i % 12) for i in range(193)]
+    if history == "empty":
+        readings = []
+    elif history == "short":
+        readings = readings[:20]
+    elif history == "flat":
+        readings = [Reading(reading.at, 1) for reading in readings]
+    else:
+        readings = [Reading(reading.at - timedelta(hours=3), reading.height)
+                    for reading in readings]
+    assert TowerPierTides(lambda _: readings).get(now) is None
+    assert "Tower Pier tide data unavailable" in caplog.text
+
+
+def test_tower_pier_response_parsing(monkeypatch):
+    from urllib.parse import parse_qs, urlsplit
+    from siriusvision.services import tides
+
+    payload = {"items": [
+        {"dateTime": "2026-06-01T12:15:00+01:00", "value": 2.5},
+        {"dateTime": "2026-06-01T11:00:00Z", "value": 2},
+    ]}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def read(self, limit):
+            assert limit == 2_000_001
+            return json.dumps(payload).encode()
+
+    def request(url, timeout):
+        assert "0007-level-tidal_level-i-15_min-mAOD/readings" in url
+        assert parse_qs(urlsplit(url).query)["since"] == ["2026-05-29T00:00:00Z"]
+        assert timeout == 10
+        return Response()
+
+    monkeypatch.setattr(tides, "urlopen", request)
+    since = datetime(2026, 5, 29, tzinfo=timezone.utc)
+    readings = tides.fetch_readings(since)
+    assert [reading.height for reading in readings] == [2, 2.5]
+    assert readings[-1].at == datetime(2026, 6, 1, 11, 15, tzinfo=timezone.utc)
+    payload["items"][0]["dateTime"] = "2026-06-01T12:15:00"
+    with pytest.raises(ValueError, match="timezone"):
+        tides.fetch_readings(since)
+    payload["items"][0] = {"dateTime": "2026-06-01T12:15:00Z", "value": True}
+    with pytest.raises(ValueError, match="timestamp or height"):
+        tides.fetch_readings(since)
+
+
+@pytest.mark.parametrize("level", [0, 50, 100])
+def test_cli_tide_simulation_and_example_config(tmp_path, level):
+    path = tmp_path / f"tide-{level}.png"
+    subprocess.run([
+        sys.executable, "-m", "siriusvision", "--config", "config.example.json",
+        "--display", "png", "--screen", "tide-lamp", "--tide-level", str(level),
+        "--output", str(path),
+    ], check=True)
+    with Image.open(path) as image:
+        assert image.mode == "RGB" and image.size == (64, 64) and image.getbbox()
+    result = subprocess.run([
+        sys.executable, "-m", "siriusvision", "--display", "png",
+        "--tide-level", "nan", "--output", str(path),
+    ], capture_output=True)
+    assert result.returncode == 2 and b"0 to 100" in result.stderr
 
 
 def test_display_validation_and_brightness():
@@ -208,7 +305,7 @@ def test_headless_runner_cycles_skips_unchanged_frames_and_closes():
     from siriusvision.__main__ import run_headless
 
     elapsed = [0.0]
-    manager = ScreenManager(Config(cycle_seconds=1), monotonic=lambda: elapsed[0])
+    manager = ScreenManager(Config(cycle_seconds=1, demo_tides=True), monotonic=lambda: elapsed[0])
 
     class StopAfter:
         def __init__(self, loops):
@@ -238,7 +335,7 @@ def test_headless_runner_cycles_skips_unchanged_frames_and_closes():
     stop_after = StopAfter(3)
     run_headless(manager, display, lambda: datetime(2025, 6, 1, tzinfo=timezone.utc),
                  stop_after, stop_after.wait)
-    assert manager.name == "tide-moon"
+    assert manager.name == "album-art"
     assert len(display.images) == 3
     assert display.closed
 
@@ -256,23 +353,26 @@ def test_manager_controls():
     manager = ScreenManager(Config(cycle_seconds=5), monotonic=lambda: elapsed[0])
     elapsed[0] = 5
     manager.tick()
-    assert manager.name == "letter-clock"
+    assert manager.name == "tide-lamp"
     manager.toggle_pause()
     elapsed[0] = 100
     manager.tick()
-    assert manager.name == "letter-clock"
+    assert manager.name == "tide-lamp"
     manager.previous()
-    assert manager.name == "word-clock"
+    assert manager.name == "letter-clock"
     manager.toggle_pause()
     elapsed[0] += 5
     manager.tick()
-    assert manager.name == "letter-clock"
+    assert manager.name == "tide-lamp"
 
 
 @pytest.mark.parametrize("data", [
     {"brightness": -1}, {"brightness": True}, {"cycle_seconds": 0},
     {"timezone": "Not/AZone"}, {"screens": []}, {"demo_tides": "yes"},
     {"palette": ["#ffffff"]}, {"unexpected": True},
+    {"tide_simulation_level": -1}, {"tide_simulation_level": 101},
+    {"tide_simulation_level": True}, {"tide_simulation_level": float("nan")},
+    {"screens": ["word-clock"]}, {"screens": ["tide-moon"]},
 ])
 def test_invalid_config(tmp_path, data):
     path = tmp_path / "config.json"
