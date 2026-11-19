@@ -1,16 +1,16 @@
 {
-  "screens": ["word-clock", "letter-clock", "tide-moon", "album-art"],
+  "screens": ["letter-clock", "tide-lamp", "album-art"],
   "cycle_seconds": 30,
   "brightness": 80,
   "pi_brightness": 20,
   "timezone": "Europe/London",
-  "clock_format": 12,
-  "demo_tides": true,
+  "demo_tides": false,
+  "tide_simulation_level": null,
   "show_grid": false,
   "palette": ["#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF"],
   "spotify_enabled": false,
   "spotify_mode": "auto",
   "spotify_poll_seconds": 30,
   "spotify_idle_poll_seconds": 60,
-  "spotify_fallback_screen": "word-clock"
+  "spotify_fallback_screen": "letter-clock"
 }

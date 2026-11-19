@@ -243,7 +243,7 @@ def test_watch_frames_switch_album_skip_identical_redraw_and_fall_back(tmp_path,
     assert len(downloads) == 2  # Resuming the same album does not re-download it.
     now[0] += 61
     assert manager.render(date).tobytes() == clock
-    assert manager.name == "word-clock"
+    assert manager.name == "letter-clock"
 
 
 @pytest.mark.parametrize(("http_error", "retry", "message"), [
@@ -324,11 +324,11 @@ def test_spotify_config_preserves_desktop_outputs_and_explicit_screen(tmp_path, 
     assert main(["--config", str(config), "--display", "png", "--screen", "album-art",
                  "--output", str(output)]) == 0
     with Image.open(output) as image:
-        assert image.mode == "RGB" and image.size == (64, 64) and image.getpixel((0, 0)) != (0, 0, 0)
+        assert image.mode == "RGB" and image.size == (64, 64) and image.getbbox()
 
     def preview(manager, now):
         assert manager.playback is None
-        assert manager.name == "word-clock"
+        assert manager.name == "letter-clock"
         return SimpleNamespace(run=lambda: manager.render(now()))
 
     monkeypatch.setitem(sys.modules, "siriusvision.displays.mac_preview", SimpleNamespace(MacPreview=preview))

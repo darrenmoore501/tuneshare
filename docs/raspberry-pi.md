@@ -77,7 +77,10 @@ sudo /home/darren/tuneshare/.venv/bin/python -m siriusvision \
   --display pi --config /home/darren/tuneshare/config.json
 ```
 
-Add `--screen letter-clock` to start on a different configured screen.
+The three screens are `letter-clock`, `tide-lamp` and `album-art`. The
+letter-grid clock is the default; the separate spoken-word clock and
+tide/moon screen have been removed. Add `--screen tide-lamp` to start on the
+Tower Pier lamp. See [Tide lamp](tide-lamp.md) for simulation and data behaviour.
 Screens advance using `cycle_seconds`; the default is 30 seconds. The
 application updates at most once per second and avoids resending unchanged
 frames. Stop it with **Ctrl+C** or `sudo kill -TERM <pid>`; shutdown clears
@@ -128,11 +131,12 @@ Unexpected failures restart after five seconds.
 
 Spotify is off by default. When enabled on the Pi, a track with a usable
 cover takes over the display without cycling. When paused, stopped, offline,
-or unable to get a cover, the display stays on the normal word clock.
+or unable to get a cover, the display stays on the letter-grid clock.
 `spotify_fallback_screen` can name a different fixed fallback. The polling
 defaults are 30 seconds for music and 60 seconds otherwise; keep intervals
 conservative to avoid Spotify API limits. Explicit `--screen` and the
-preview/PNG backends retain their usual behaviour, including demo album art.
+preview/PNG backends retain their usual behaviour. Without a real cover,
+`album-art` shows the letter clock rather than synthetic artwork.
 
 ### Configure and authorize
 

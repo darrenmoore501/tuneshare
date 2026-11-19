@@ -4,7 +4,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-SCREEN_NAMES = ("word-clock", "letter-clock", "tide-moon", "album-art")
+SCREEN_NAMES = ("letter-clock", "tide-lamp", "album-art")
 
 
 @dataclass(frozen=True)
@@ -14,15 +14,15 @@ class Config:
     brightness: int = 80
     pi_brightness: int = 20
     timezone: str = "Europe/London"
-    clock_format: int = 12
-    demo_tides: bool = True
+    demo_tides: bool = False
+    tide_simulation_level: float | None = None
     show_grid: bool = False
     palette: tuple[str, ...] = ("#FFCC66", "#FF758F", "#75DCD1", "#83A8FF", "#D1A4FF")
     spotify_enabled: bool = False
     spotify_mode: str = "auto"
     spotify_poll_seconds: float = 30
     spotify_idle_poll_seconds: float = 60
-    spotify_fallback_screen: str = "word-clock"
+    spotify_fallback_screen: str = "letter-clock"
     spotify_runtime_dir: str = "/run/siriusvision-spotify"
     spotify_client_id: str = ""
 
@@ -53,10 +53,13 @@ def load_config(path: str | None = None) -> Config:
             raise ValueError("brightness must be an integer from 0 to 100")
         if type(config.pi_brightness) is not int or not 1 <= config.pi_brightness <= 100:
             raise ValueError("pi_brightness must be an integer from 1 to 100")
-        if type(config.clock_format) is not int or config.clock_format not in (12, 24):
-            raise ValueError("clock_format must be 12 or 24")
         if type(config.demo_tides) is not bool or type(config.show_grid) is not bool:
             raise ValueError("demo_tides and show_grid must be booleans")
+        if config.tide_simulation_level is not None and (
+            type(config.tide_simulation_level) not in (int, float)
+            or not 0 <= config.tide_simulation_level <= 100
+        ):
+            raise ValueError("tide_simulation_level must be a percentage from 0 to 100")
         if type(config.spotify_enabled) is not bool:
             raise ValueError("spotify_enabled must be a boolean")
         if config.spotify_mode != "auto":

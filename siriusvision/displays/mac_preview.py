@@ -47,7 +47,7 @@ class MacPreview:
             self.manager.toggle_pause()
         elif key == "q":
             self.close()
-        elif key in ("1", "2", "3", "4") and int(key) <= len(self.manager.order):
+        elif key in ("1", "2", "3") and int(key) <= len(self.manager.order):
             self.manager.select(int(key) - 1)
 
     def show(self, image: Image.Image) -> None:
@@ -57,16 +57,20 @@ class MacPreview:
             self.transition_at = time.monotonic()
             self.last_name = self.manager.name
         self.last_frame = image
+        suffix = "  •  paused" if self.manager.paused else ""
+        self.title.configure(text=self.manager.name.replace("-", " ").title() + suffix)
         if self.previous_frame is not None:
             alpha = min(1.0, (time.monotonic() - self.transition_at) / 0.3)
             image = Image.blend(self.previous_frame, image, alpha)
             if alpha == 1.0:
                 self.previous_frame = None
+        frame = image.tobytes()
+        if frame == getattr(self, "displayed_frame", None):
+            return
+        self.displayed_frame = frame
         enlarged = image.resize((640, 640), Image.Resampling.NEAREST)
         self.photo = ImageTk.PhotoImage(enlarged, master=self.root)
         self.canvas.itemconfigure(self.image_item, image=self.photo)
-        suffix = "  •  paused" if self.manager.paused else ""
-        self.title.configure(text=self.manager.name.replace("-", " ").title() + suffix)
 
     def update(self) -> None:
         if self.closed:

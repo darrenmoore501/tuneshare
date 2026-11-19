@@ -4,15 +4,14 @@ from typing import Protocol
 
 from PIL import Image
 
-from siriusvision.services.tides import TideData
+from siriusvision.services.tides import LampTideData
 
 
 @dataclass(frozen=True)
 class RenderContext:
     now: datetime
     palette: tuple[str, ...]
-    clock_format: int = 12
-    tide: TideData | None = None
+    tide: LampTideData | None = None
     width: int = 64
     height: int = 64
     brightness: int = 100
